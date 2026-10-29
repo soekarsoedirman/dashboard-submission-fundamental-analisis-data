@@ -10,27 +10,62 @@ st.markdown("---")
 
 @st.cache_data
 def load_data():
-    df_pendapatan = pd.read_csv("./dashboard/pendapatan_kategori.csv")
+    df_order_raw = pd.read_csv("./dashboard/df_order_detail.csv")
     df_pengiriman = pd.read_csv("./dashboard/pengiriman_terlambat.csv")
     
     if 'True' in df_pengiriman.columns and 'False' in df_pengiriman.columns:
         df_pengiriman['Total_Pengiriman'] = df_pengiriman['True'] + df_pengiriman['False']
         df_pengiriman = df_pengiriman.rename(columns={'True': 'Jumlah_Terlambat'})
         df_pengiriman['Persentase_Terlambat_State'] = (df_pengiriman['Jumlah_Terlambat'] / df_pengiriman['Total_Pengiriman']) * 100
-        
-    return df_pendapatan, df_pengiriman
+    
+    if 'order_purchase_timestamp' in df_order_raw.columns:
+        df_order_raw['order_purchase_timestamp'] = pd.to_datetime(df_order_raw['order_purchase_timestamp'], errors='coerce')
+        df_order_raw['tahun'] = df_order_raw['order_purchase_timestamp'].dt.year
 
-df_pendapatan, df_pengiriman = load_data()
+    return df_order_raw, df_pengiriman
 
-total_penjualan = df_pendapatan['total_pendapatan'].sum()
+df_order_raw, df_pengiriman = load_data()
+
+
 st.subheader("1. Total Pendapatan Kategori")
+
+if 'tahun' in df_order_raw.columns:
+    daftar_tahun = sorted(df_order_raw['tahun'].dropna().unique())
+    tahun_terpilih = st.multiselect(
+        "Pilih Tahun Transaksi (Khusus untuk Pendapatan):", 
+        options=daftar_tahun
+    )
+    
+    if tahun_terpilih:
+        df_order = df_order_raw[df_order_raw['tahun'].isin(tahun_terpilih)]
+    else:
+        df_order = df_order_raw
+else:
+    df_order = df_order_raw
+
+pendapatan_kategori  = (
+    df_order.groupby('product_category_name_english')['price']
+    .sum()
+    .sort_values(ascending=False)
+    .to_frame(name='total_pendapatan')
+    .reset_index()
+)
+
+total_semua_kategori = pendapatan_kategori['total_pendapatan'].sum()
+
+pendapatan_kategori['persentase'] = (
+    pendapatan_kategori['total_pendapatan'] / total_semua_kategori
+) * 100
+
+total_penjualan = pendapatan_kategori['total_pendapatan'].sum()
+
 st.metric(label="Total Pendapatan (BRL)", value=f"R$ {total_penjualan:,.2f}")
 st.write("")
 
 # --- FITUR DINAMIS: SLIDER UNTUK TOP N KATEGORI ---
 top_n_kategori = st.slider("Geser untuk menampilkan jumlah Top N Kategori:", min_value=5, max_value=50, value=20, step=5)
 
-top_kategori = df_pendapatan.head(top_n_kategori)
+top_kategori = pendapatan_kategori.head(top_n_kategori)
 fig_kategori = px.bar(
     top_kategori, 
     x='product_category_name_english', 
