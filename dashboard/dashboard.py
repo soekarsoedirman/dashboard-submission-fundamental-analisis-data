@@ -33,7 +33,7 @@ if 'tahun' in df_order_raw.columns:
     daftar_tahun = sorted(df_order_raw['tahun'].dropna().unique())
     tahun_terpilih = st.multiselect(
         "Pilih Tahun Transaksi (Khusus untuk Pendapatan):", 
-        options=daftar_tahun
+        options=daftar_tahun, 
     )
     
     if tahun_terpilih:
